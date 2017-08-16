@@ -6,112 +6,67 @@
 /*   By: fkao <fkao@student.42.us.org>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2017/07/31 12:53:13 by fkao              #+#    #+#             */
-/*   Updated: 2017/08/01 14:57:03 by fkao             ###   ########.fr       */
+/*   Updated: 2017/08/15 14:56:01 by fkao             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ft_ls.h"
-#include <dirent.h>
 #include <sys/stat.h>
 
-void	ls_get_rwx(char *tmp, char **ptr)
+void	ls_mode(t_ftls *file)
 {
-	while (*tmp)
-	{
-		(*tmp == '0') ? ft_strcpy(*ptr, "---") : 0;
-		(*tmp == '1') ? ft_strcpy(*ptr, "--x") : 0;
-		(*tmp == '2') ? ft_strcpy(*ptr, "-w-") : 0;
-		(*tmp == '3') ? ft_strcpy(*ptr, "-wx") : 0;
-		(*tmp == '4') ? ft_strcpy(*ptr, "r--") : 0;
-		(*tmp == '5') ? ft_strcpy(*ptr, "r-x") : 0;
-		(*tmp == '6') ? ft_strcpy(*ptr, "rw-") : 0;
-		(*tmp == '7') ? ft_strcpy(*ptr, "rwx") : 0;
-		tmp++;
-		*ptr += 3;
-	}
+	file->mode = (char*)ft_memalloc(sizeof(char) * 10);
+	file->mode[0] = (file->buf->st_mode & S_IRUSR) ? 'r' : '-';
+	file->mode[1] = (file->buf->st_mode & S_IWUSR) ? 'w' : '-';
+	file->mode[2] = (file->buf->st_mode & S_IXUSR) ? 'x' : '-';
+	file->mode[3] = (file->buf->st_mode & S_IRGRP) ? 'r' : '-';
+	file->mode[4] = (file->buf->st_mode & S_IWGRP) ? 'w' : '-';
+	file->mode[5] = (file->buf->st_mode & S_IXGRP) ? 'x' : '-';
+	file->mode[6] = (file->buf->st_mode & S_IROTH) ? 'r' : '-';
+	file->mode[7] = (file->buf->st_mode & S_IWOTH) ? 'w' : '-';
+	file->mode[8] = (file->buf->st_mode & S_IXOTH) ? 'x' : '-';
 }
 
-char	*ls_int_mode(char *tmp)
+void	ls_type(t_ftls *file)
 {
-	char	*new;
-	char	*ptr;
-
-	new = (char*)ft_memalloc((sizeof(char)) * 11);
-	ptr = new;
-	if (*tmp == '4')
-	{
-		*ptr = 'd';
-		tmp += 2;
-		ptr++;
-	}
-	else if (*tmp == '1')
-	{
-		*ptr = '-';
-		tmp += 3;
-		ptr++;
-	}
-	ls_get_rwx(tmp, &ptr);
-	return (new);
+	if ((file->buf->st_mode & S_IFMT) == S_IFBLK)
+		file->type = 'b';
+	else if ((file->buf->st_mode & S_IFMT) == S_IFCHR)
+		file->type = 'c';
+	else if ((file->buf->st_mode & S_IFMT) == S_IFDIR)
+		file->type = 'd';
+	else if ((file->buf->st_mode & S_IFMT) == S_IFIFO)
+		file->type = 'p';
+	else if ((file->buf->st_mode & S_IFMT) == S_IFLNK)
+		file->type = 'l';
+	else if ((file->buf->st_mode & S_IFMT) == S_IFREG)
+		file->type = '-';
+	else if ((file->buf->st_mode & S_IFMT) == S_IFSOCK)
+		file->type = 's';
 }
 
-char	**ls_mode_stack(char *path, char **name, int count)
+void	ls_file(t_list **lst, char *path)
 {
-	struct stat	*buf;
-	char		**mode;
-	char		*tmp;
-	int			i;
-
-	mode = (char**)ft_memalloc(sizeof(char*) * (count + 1));
-	i = 0;
-	buf = malloc(sizeof(struct stat));
-	while (i < count)
-	{
-		tmp = ft_strjoin(path, name[i]);
-		stat(tmp, buf);
-		ft_strdel(&tmp);
-		tmp = ft_itoa_base(buf->st_mode, 8);
-		mode[i] = ls_int_mode(tmp);
-		ft_strdel(&tmp);
-		i++;
-	}
-	free(buf);
-	return (mode);
-}
-
-char	**ls_file_stack(char *path, int count)
-{
-	DIR				*dir;
-	struct dirent	*entry;
-	char			**name;
-	int				i;
-
-	name = (char**)ft_memalloc(sizeof(char*) * (count + 1));
-	dir = opendir(path);
-	entry = readdir(dir);
-	i = 0;
-	while (entry)
-	{
-		name[i++] = entry->d_name;
-		entry = readdir(dir);
-	}
-	closedir(dir);
-	return (name);
-}
-
-int		ls_dir_len(char *path)
-{
-	DIR				*dir;
-	struct dirent	*entry;
-	int				count;
+	t_dir	*dir;
+	t_entr	*entry;
+	t_ftls	*file;
+	char	*tmp;
 
 	dir = opendir(path);
 	entry = readdir(dir);
-	count = 0;
 	while (entry)
 	{
-		count++;
+		file = (t_ftls*)ft_memalloc(sizeof(*file));
+		file->entry = entry;
+		file->buf = malloc(sizeof(t_stat));
+		tmp = ft_strjoin(path, file->entry->d_name);
+		if (!(file->err = lstat(tmp, file->buf)))
+		{
+			ls_mode(file);
+			ls_type(file);
+		}
+		ft_strdel(&tmp);
+		ft_lstadd(lst, ft_lstnew(file, sizeof(*file)));
 		entry = readdir(dir);
 	}
-	closedir(dir);
-	return (count);
 }

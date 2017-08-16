@@ -6,162 +6,105 @@
 /*   By: fkao <fkao@student.42.us.org>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2017/07/28 12:30:42 by fkao              #+#    #+#             */
-/*   Updated: 2017/08/01 15:09:18 by fkao             ###   ########.fr       */
+/*   Updated: 2017/08/15 17:02:15 by fkao             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ft_ls.h"
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <dirent.h>
 
-t_attr	g_attr;
+t_flag	g_flag;
 
-void	ls_sort_alpha(char **name, int count)
+void	ls_sort(t_list **lst)
 {
-	int		i;
-	char	*tmp;
+	t_list	*ptr;
+	t_list	*tmp;
+	t_ftls	*a;
+	t_ftls	*b;
 
-	i = 0;
-	while (i < count - 1)
+	ptr = *lst;
+	while (ptr->next)
 	{
-		if (ft_strcmp(name[i], name[i + 1]) > 0)
+		a = (t_ftls*)(ptr->content);
+		b = (t_ftls*)(ptr->next->content);
+		if (ft_strcmp(a->entry->d_name, b->entry->d_name) > 0)
 		{
-			ft_strswap(&name[i], &name[i + 1]);
-			i = -1;
+			tmp->content = ptr->content;
+			ptr->content = ptr->next->content;
+			ptr->next->content = tmp->content;
+			ptr = *lst;
 		}
-		i++;
+		else
+			ptr = ptr->next;
 	}
 }
 
-void	ft_ls(char *direct)
+void	ls_print(t_list *lst)
 {
-	int		i;
-	t_ftls	*e;
+	t_list	*tmp;
+	t_ftls	*file;
 
-	e = (t_ftls*)ft_memalloc(sizeof(*e));
-	e->path = ft_strjoin(direct, "/");
-	e->count = ls_dir_len(e->path);
-	e->name = ls_file_stack(e->path, e->count);
-	ls_sort_alpha(e->name, e->count);
-	e->mode = ls_mode_stack(e->path, e->name, e->count);
-	i = 0;
-	if (ft_strcmp(direct, "."))
+	tmp = lst;
+	if (!g_flag.a)
+		while (tmp)
+		{
+			file = (t_ftls*)(tmp->content);
+			if (*file->entry->d_name == '.')
+				lst = lst->next;
+			tmp = tmp->next;
+		}
+	while (lst)
 	{
-		ft_putstr(direct);
-		ft_putendl(":");
+		file = (t_ftls*)(lst->content);
+		printf("%s\n", file->entry->d_name);
+		lst = lst->next;
 	}
-	while (i < e->count)
-	{
-		if (e->name[i][0] != '.')
-			ft_putendl(e->name[i]);
-		i++;
-	}
-	if (g_attr.R)
-		ls_recurse_sd(e->path, e->name, e->mode, e->count);
-	ft_strdel(&e->path);
-	ft_vecdel((void**)e->mode, e->count);
-	free(e->name);
-	free(e);
 }
 
-int		ftls_isoption(int c)
+void	ft_ls(char *path)
 {
-	return (c == 'l' || c == 'R' || c == 'a' || c == 'r' || c == 't');
-}
+	t_list	*lst;
+	t_ftls	*file;
+	char	*str;
 
-int		ls_parse_options(char *arg)
-{
-	while (*(++arg))
+	path = ft_strjoin(path, "/");
+	lst = 0;
+	ls_file(&lst, path);
+	ls_sort(&lst);
+	ls_print(lst);
+	while (lst && g_flag.R)
 	{
-		if (ftls_isoption(*arg))
+		file = (t_ftls*)(lst->content);
+		if (file->type == 'd' && ft_strcmp(file->entry->d_name, ".")
+			&& ft_strcmp(file->entry->d_name, ".."))
 		{
-			g_attr.l = (*arg == 'l') ? 1 : g_attr.l;
-			g_attr.R = (*arg == 'R') ? 1 : g_attr.R;
-			g_attr.a = (*arg == 'a') ? 1 : g_attr.a;
-			g_attr.r = (*arg == 'r') ? 1 : g_attr.r;
-			g_attr.t = (*arg == 't') ? 1 : g_attr.t;
+			str = ft_strjoin(path, file->entry->d_name);
+			printf("\n%s:\n", str);
+			ft_ls(str);
 		}
-		if (!ftls_isoption(*arg))
-		{
-			ft_putstr("./ft_ls: illegal option -- ");
-			ft_putendl(&*arg);
-			ft_putendl("usage: ./ft_ls [-Ralrt] [file ...]");
-			return (0);
-		}
+		lst = lst->next;
 	}
-	return (1);
 }
 
 int		main(int ac, char **av)
 {
-	int	i;
-	int	j;
-	int	count;
-	char	**name;
-	char	**mode;
+	int		i;
 
 	i = 1;
-	j = 0;
 	while (i < ac)
 	{
-		if (av[i][0] == '-' && ft_strlen(av[i]) != 1 && !g_attr.start)
+		if (av[i][0] == '-' && ft_strlen(av[i]) != 1)
 		{
-			if (!ls_parse_options(av[i]))
+			if (!ls_flag(av[i]))
 				return (0);
 		}
 		else
-		{
-			if (!g_attr.start)
-				name = (char**)ft_memalloc(sizeof(char*) * (ac - i + 1));
-			g_attr.start = 1;
-			name[j++] = av[i];
-			count++;
-		}
+			break ;
 		i++;
 	}
-	if (!g_attr.start)
+	if (i == ac)
 		ft_ls(".");
 	else
-	{
-		ls_sort_alpha(name, count);
-		mode = ls_mode_stack("./", name, count);
-		i = 0;
-		while (i < count)
-		{
-			if (open(name[i], O_RDONLY) == -1)
-			{
-				ft_putstr("ls: ");
-				ft_putstr(name[i]);
-				ft_putendl(": No such file or directory");
-				name[i] = 0;
-			}
-			i++;
-		}
-		i = 0;
-		while (i < count)
-		{
-			if (name[i] && mode[i][0] == '-')
-			{
-				ft_putstr(mode[i]);
-				write(1, "\t", 1);
-				ft_putendl(name[i]);
-				name[i] = 0;
-			}
-			i++;
-		}
-		write(1, "\n", 1);
-		i = 0;
-		while (i < count)
-		{
-			if (name[i])
-			{
-				ft_ls(name[i]);
-				name[i] = 0;
-			}
-			i++;
-		}
-	}
-	// sleep(60);
+		ls_parse_arg(av + i, ac - i);
+	// sleep	(50);
 	return (0);
 }
