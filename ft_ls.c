@@ -5,84 +5,94 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: fkao <fkao@student.42.us.org>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2017/07/28 12:30:42 by fkao              #+#    #+#             */
-/*   Updated: 2017/08/15 17:02:15 by fkao             ###   ########.fr       */
+/*   Created: 2017/08/17 11:40:28 by fkao              #+#    #+#             */
+/*   Updated: 2017/08/24 12:22:30 by fkao             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ft_ls.h"
 
 t_flag	g_flag;
+int		(*g_sort)() = &sort_alpha;
+int		g_total = 0;
+int		g_link = 0;
+int		g_size = 0;
+int		g_xattr = 0;
 
-void	ls_sort(t_list **lst)
+void	ls_free_lst(void *node, size_t size)
 {
-	t_list	*ptr;
-	t_list	*tmp;
-	t_ftls	*a;
-	t_ftls	*b;
+	t_ftls	*stat;
 
-	ptr = *lst;
-	while (ptr->next)
+	(void)size;
+	stat = (t_ftls*)node;
+	if (stat)
 	{
-		a = (t_ftls*)(ptr->content);
-		b = (t_ftls*)(ptr->next->content);
-		if (ft_strcmp(a->entry->d_name, b->entry->d_name) > 0)
-		{
-			tmp->content = ptr->content;
-			ptr->content = ptr->next->content;
-			ptr->next->content = tmp->content;
-			ptr = *lst;
-		}
-		else
-			ptr = ptr->next;
+		if (stat->name)
+			free(stat->name);
+		if (stat->full)
+			free(stat->full);
+		if (stat->buf)
+			free(stat->buf);
+		free(stat);
 	}
 }
 
-void	ls_print(t_list *lst)
+void	ls_recurse(t_list *file)
 {
-	t_list	*tmp;
-	t_ftls	*file;
+	t_ftls	*stat;
 
-	tmp = lst;
-	if (!g_flag.a)
-		while (tmp)
+	if (g_flag.rec)
+		while (file)
 		{
-			file = (t_ftls*)(tmp->content);
-			if (*file->entry->d_name == '.')
-				lst = lst->next;
-			tmp = tmp->next;
+			stat = (t_ftls*)(file->content);
+			if ((stat->buf->st_mode & S_IFMT) == S_IFDIR \
+				&& ft_strcmp(stat->name, ".") && ft_strcmp(stat->name, ".."))
+			{
+				ft_printf("\n%s:\n", stat->full);
+				ft_ls(stat->full);
+			}
+			file = file->next;
 		}
-	while (lst)
+}
+
+void	ls_print_all(t_list *file)
+{
+	t_ftls	*stat;
+
+	if (g_flag.l)
+		ft_printf("total %d\n", g_total);
+	while (file)
 	{
-		file = (t_ftls*)(lst->content);
-		printf("%s\n", file->entry->d_name);
-		lst = lst->next;
+		stat = (t_ftls*)(file->content);
+		ls_print(stat);
+		file = file->next;
 	}
 }
 
-void	ft_ls(char *path)
+void	ft_ls(char *arg)
 {
-	t_list	*lst;
-	t_ftls	*file;
-	char	*str;
+	t_list	*file;
+	t_dir	*dir;
+	t_entr	*entry;
+	char	*path;
 
-	path = ft_strjoin(path, "/");
-	lst = 0;
-	ls_file(&lst, path);
-	ls_sort(&lst);
-	ls_print(lst);
-	while (lst && g_flag.R)
-	{
-		file = (t_ftls*)(lst->content);
-		if (file->type == 'd' && ft_strcmp(file->entry->d_name, ".")
-			&& ft_strcmp(file->entry->d_name, ".."))
-		{
-			str = ft_strjoin(path, file->entry->d_name);
-			printf("\n%s:\n", str);
-			ft_ls(str);
-		}
-		lst = lst->next;
-	}
+	file = NULL;
+	if (!(dir = opendir(arg)))
+		return (ls_error(arg, 2));
+	path = (ft_strcmp(arg, "/")) ? ft_strjoin(arg, "/") : ft_strdup(arg);
+	ls_reset_len();
+	while ((entry = readdir(dir)))
+		if (g_flag.a || entry->d_name[0] != '.' || (g_flag.alm &&
+		ft_strcmp(entry->d_name, ".") && ft_strcmp(entry->d_name, "..")))
+			ls_store(&file, entry->d_name, path);
+	closedir(dir);
+	ls_mergesort(&file, g_sort);
+	if (g_flag.r)
+		ft_lstrev(&file);
+	ls_print_all(file);
+	ls_recurse(file);
+	ft_lstdel(&file, &ls_free_lst);
+	ft_strdel(&path);
 }
 
 int		main(int ac, char **av)
@@ -92,11 +102,13 @@ int		main(int ac, char **av)
 	i = 1;
 	while (i < ac)
 	{
-		if (av[i][0] == '-' && ft_strlen(av[i]) != 1)
+		if (ft_strcmp(av[i], "--") == 0)
 		{
-			if (!ls_flag(av[i]))
-				return (0);
+			i++;
+			break ;
 		}
+		else if (av[i][0] == '-' && ft_strlen(av[i]) != 1)
+			ls_flag(av[i]);
 		else
 			break ;
 		i++;
@@ -104,7 +116,6 @@ int		main(int ac, char **av)
 	if (i == ac)
 		ft_ls(".");
 	else
-		ls_parse_arg(av + i, ac - i);
-	// sleep	(50);
+		ls_build_arg(ac - i, av + i);
 	return (0);
 }
