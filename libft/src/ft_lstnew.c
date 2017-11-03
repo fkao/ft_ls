@@ -3,38 +3,37 @@
 /*                                                        :::      ::::::::   */
 /*   ft_lstnew.c                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: agrumbac <agrumbac@student.42.fr>          +#+  +:+       +#+        */
+/*   By: fkao <marvin@42.fr>                        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2016/11/09 20:44:45 by agrumbac          #+#    #+#             */
-/*   Updated: 2016/11/16 14:22:10 by agrumbac         ###   ########.fr       */
+/*   Created: 2017/03/06 17:06:30 by fkao              #+#    #+#             */
+/*   Updated: 2017/03/06 17:56:29 by fkao             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "../includes/libft.h"
+#include "libft.h"
 #include <stdlib.h>
 
-t_list		*ft_lstnew(const void *content, size_t content_size)
+t_list	*ft_lstnew(void const *content, size_t content_size)
 {
-	t_list	*new;
-	void	*content_cpy;
-	size_t	content_size_cpy;
+	t_list	*lst;
 
-	if (!(new = (void*)malloc(sizeof(*new))))
-		return (NULL);
-	if (content == NULL)
+	lst = malloc(sizeof(*lst));
+	if (lst)
 	{
-		content_cpy = NULL;
-		content_size_cpy = 0;
+		if (!content)
+		{
+			lst->content_size = 0;
+			lst->content = NULL;
+		}
+		else
+		{
+			lst->content_size = content_size;
+			lst->content = ft_memalloc(content_size);
+			if (!lst->content)
+				return (NULL);
+			ft_memmove(lst->content, content, content_size);
+		}
+		lst->next = NULL;
 	}
-	else if (!(content_cpy = (void*)malloc(content_size)))
-		return (NULL);
-	else
-	{
-		ft_memcpy(content_cpy, (void*)content, content_size);
-		content_size_cpy = content_size;
-	}
-	new->content = content_cpy;
-	new->content_size = content_size_cpy;
-	new->next = NULL;
-	return (new);
+	return (lst);
 }
